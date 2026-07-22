@@ -12,8 +12,9 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Directory setup
-DB_PATH = r"C:\Users\dell\Documents\python\faces_db"
-CSV_PATH = r"C:\Users\dell\Documents\python\attendance.csv"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "faces_db")
+CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
 os.makedirs(DB_PATH, exist_ok=True)
 
