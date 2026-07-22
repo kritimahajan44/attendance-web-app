@@ -6,4 +6,4 @@ face_env312/
 *.avi
 __pycache__/
 .vscode/
-faces_db/
+#faces_db/
