@@ -1,0 +1,9 @@
+face_env312/
+*.pkl
+*.h5
+*.dat
+*.mp4
+*.avi
+__pycache__/
+.vscode/
+faces_db/
