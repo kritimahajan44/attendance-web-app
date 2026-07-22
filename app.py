@@ -1,4 +1,5 @@
 import os
+import glob
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import base64
@@ -161,6 +162,12 @@ def scan():
         return jsonify({"message": "⚠️ Database is empty. Please register first using the blue button."})
     
     try:
+        # Delete old DeepFace .pkl cache
+        for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
+            try:
+                os.remove(pkl)
+            except Exception:
+                pass
         dfs = DeepFace.find(img_path=frame, db_path=DB_PATH, detector_backend='skip', enforce_detection=False, silent=True)
         if len(dfs) > 0 and not dfs[0].empty:
             matched_file = dfs[0].iloc[0]['identity']
