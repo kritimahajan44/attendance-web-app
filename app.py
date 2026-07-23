@@ -1,5 +1,6 @@
 import os
 import glob
+import gc
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import base64
@@ -169,13 +170,14 @@ def scan():
             except Exception:
                 pass
         dfs = DeepFace.find(
-    img_path=frame, 
-    db_path=DB_PATH, 
-    model_name='VGG-Face', 
-    detector_backend='skip', 
-    enforce_detection=False, 
-    silent=True
-)
+            img_path=frame, 
+            db_path=DB_PATH, 
+            model_name='OpenFace', 
+            detector_backend='skip', 
+            enforce_detection=False, 
+            silent=True
+        )
+        gc.collect()
         if len(dfs) > 0 and not dfs[0].empty:
             matched_file = dfs[0].iloc[0]['identity']
             person_name = os.path.basename(matched_file).rsplit('.', 1)[0]
