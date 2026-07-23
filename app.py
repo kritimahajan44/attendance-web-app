@@ -170,14 +170,14 @@ def scan():
             except Exception:
                 pass
             # Fast, low-RAM, and high-accuracy scanning
-        dfs = DeepFace.find(
+    dfs = DeepFace.find(
             img_path=frame, 
             db_path=DB_PATH, 
             model_name='Facenet', 
             detector_backend='opencv', 
+            distance_metric='cosine',
             enforce_detection=False, 
             silent=True
-        )
         )
         gc.collect()
         if len(dfs) > 0 and not dfs[0].empty:
