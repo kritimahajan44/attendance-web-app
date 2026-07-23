@@ -168,7 +168,14 @@ def scan():
                 os.remove(pkl)
             except Exception:
                 pass
-        dfs = DeepFace.find(img_path=frame, db_path=DB_PATH, detector_backend='skip', enforce_detection=False, silent=True)
+        dfs = DeepFace.find(
+    img_path=frame, 
+    db_path=DB_PATH, 
+    model_name='VGG-Face', 
+    detector_backend='skip', 
+    enforce_detection=False, 
+    silent=True
+)
         if len(dfs) > 0 and not dfs[0].empty:
             matched_file = dfs[0].iloc[0]['identity']
             person_name = os.path.basename(matched_file).rsplit('.', 1)[0]
