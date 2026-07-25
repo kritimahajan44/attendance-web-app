@@ -11,45 +11,60 @@ from deepface import DeepFace
 
 app = Flask(__name__)
 
+# Absolute paths to avoid directory relative-path issues on Render
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
+# Ensure required directory and CSV exist
 os.makedirs(DB_PATH, exist_ok=True)
 
-if not os.path.exists(CSV_PATH):
+if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
     df = pd.DataFrame(columns=["Name", "Date", "Time"])
     df.to_csv(CSV_PATH, index=False)
 
 def decode_image(data_url):
-    encoded_data = data_url.split(',')[1]
-    nparr = np.frombuffer(base64.b64decode(encoded_data), np.uint8)
-    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    try:
+        encoded_data = data_url.split(',')[1]
+        nparr = np.frombuffer(base64.b64decode(encoded_data), np.uint8)
+        return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except Exception as e:
+        return None
 
 def mark_attendance(name):
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
 
-    df = pd.read_csv(CSV_PATH)
-    todays_entries = df[(df['Name'] == name) & (df['Date'] == date_str)]
+    try:
+        if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
+            df = pd.DataFrame(columns=["Name", "Date", "Time"])
+        else:
+            df = pd.read_csv(CSV_PATH)
 
-    if not todays_entries.empty:
-        return f"ℹ️ {name} is already marked present for today!"
+        todays_entries = df[(df['Name'] == name) & (df['Date'] == date_str)]
 
-    new_entry = pd.DataFrame([{"Name": name, "Date": date_str, "Time": time_str}])
-    df = pd.concat([df, new_entry], ignore_index=True)
-    df.to_csv(CSV_PATH, index=False)
-    return f"✅ Attendance marked for {name} at {time_str}!"
+        if not todays_entries.empty:
+            return f"ℹ️ {name} is already marked present for today!"
+
+        new_entry = pd.DataFrame([{"Name": name, "Date": date_str, "Time": time_str}])
+        df = pd.concat([df, new_entry], ignore_index=True)
+        df.to_csv(CSV_PATH, index=False)
+        return f"✅ Attendance marked for {name} at {time_str}!"
+    except Exception as e:
+        return f"⚠️ Failed to update attendance log: {str(e)}"
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        return f"Template Error: {str(e)}", 500
 
 @app.route('/register', methods=['POST'])
 def register():
     try:
-        data = request.json
+        data = request.json or {}
         name = data.get('name', '').strip()
         image_data = data.get('image', '')
 
@@ -57,10 +72,13 @@ def register():
             return jsonify({"message": "⚠️ Name and image are required!"})
 
         frame = decode_image(image_data)
+        if frame is None:
+            return jsonify({"message": "⚠️ Invalid image payload!"})
+
         file_path = os.path.join(DB_PATH, f"{name}.jpg")
         cv2.imwrite(file_path, frame)
 
-        # Clear old cache so the new face registers immediately
+        # Remove old DeepFace pkl caches to re-index faces immediately
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
@@ -74,23 +92,32 @@ def register():
 @app.route('/scan', methods=['POST'])
 def scan():
     try:
-        frame = decode_image(request.json['image'])
-        db_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        
-        if not db_files:
-            return jsonify({"message": "⚠️ Database is empty. Please register first."})
+        data = request.json or {}
+        image_data = data.get('image', '')
+        if not image_data:
+            return jsonify({"message": "⚠️ No image captured!"})
 
+        frame = decode_image(image_data)
+        if frame is None:
+            return jsonify({"message": "⚠️ Invalid image format!"})
+
+        db_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        if not db_files:
+            return jsonify({"message": "⚠️ Database is empty. Please register first using the blue button."})
+
+        # Remove stale pickle cache files
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
             except Exception:
                 pass
 
+        # Perform fast DeepFace match using OpenCV backend for stability on free Render instances
         dfs = DeepFace.find(
             img_path=frame, 
             db_path=DB_PATH, 
             model_name='Facenet', 
-            detector_backend='skip', 
+            detector_backend='opencv', 
             enforce_detection=False, 
             silent=True
         )
@@ -112,6 +139,8 @@ def scan():
 @app.route('/logs', methods=['GET'])
 def get_logs():
     try:
+        if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
+            return jsonify([])
         df = pd.read_csv(CSV_PATH)
         records = df.to_dict(orient='records')
         return jsonify(records)
