@@ -9,12 +9,13 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from deepface import DeepFace
 
-app = Flask(__name__)
-
 # Absolute paths to avoid directory relative-path issues on Render
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
+
+# Tell Flask to look in the root folder for index.html
+app = Flask(__name__, template_folder=BASE_DIR)
 
 # Ensure required directory and CSV exist
 os.makedirs(DB_PATH, exist_ok=True)
