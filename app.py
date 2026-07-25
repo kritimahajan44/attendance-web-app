@@ -7,30 +7,56 @@ import pandas as pd
 import base64
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
+
+# Silence TensorFlow verbose logs and force CPU mode to conserve RAM on Render
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 from deepface import DeepFace
 
-# Absolute paths to avoid directory relative-path issues on Render
+# Set root paths to prevent relative path lookup errors on Linux containers
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
+# Tell Flask index.html is located at the root level directory
 app = Flask(__name__, template_folder='.')
-# Ensure required directory and CSV exist
+
+# Ensure database directory and CSV structure exist
 os.makedirs(DB_PATH, exist_ok=True)
 
 if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
     df = pd.DataFrame(columns=["Name", "Date", "Time"])
     df.to_csv(CSV_PATH, index=False)
 
+# Flag to handle model pre-loading
+_model_loaded = False
+
+@app.before_request
+def preload_models():
+    """Build Facenet model on first request so subsequent API calls execute fast."""
+    global _model_loaded
+    if not _model_loaded:
+        try:
+            print("Pre-loading Facenet model weights...")
+            DeepFace.build_model('Facenet')
+            _model_loaded = True
+            print("Facenet model ready!")
+        except Exception as e:
+            print(f"Preload log: {str(e)}")
+            _model_loaded = True
+
 def decode_image(data_url):
+    """Decode incoming base64 image data into OpenCV format."""
     try:
         encoded_data = data_url.split(',')[1]
         nparr = np.frombuffer(base64.b64decode(encoded_data), np.uint8)
         return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    except Exception as e:
+    except Exception:
         return None
 
 def mark_attendance(name):
+    """Append name and timestamp into attendance.csv if not already logged today."""
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
@@ -58,18 +84,18 @@ def register():
         image_data = data.get('image', '')
 
         if not name:
-            return jsonify({"message": "⚠️ Please enter a name!"})
+            return jsonify({"message": "⚠️ Please enter a name first!"})
         if not image_data:
             return jsonify({"message": "⚠️ No image captured!"})
 
         frame = decode_image(image_data)
         if frame is None:
-            return jsonify({"message": "⚠️ Failed to process image!"})
+            return jsonify({"message": "⚠️ Failed to decode image payload!"})
 
         file_path = os.path.join(DB_PATH, f"{name}.jpg")
         cv2.imwrite(file_path, frame)
 
-        # Remove stale pickle database cache
+        # Clear stale pickle files so DeepFace refreshes its internal database representation
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
@@ -105,6 +131,7 @@ def scan():
             except Exception:
                 pass
 
+        # Use detector_backend='skip' to ensure low memory footprint on free tier
         dfs = DeepFace.find(
             img_path=frame, 
             db_path=DB_PATH, 
@@ -135,7 +162,7 @@ def get_logs():
             df = pd.read_csv(CSV_PATH)
             return jsonify(df.to_dict(orient='records'))
         return jsonify([])
-    except Exception as e:
+    except Exception:
         return jsonify([])
 
 if __name__ == '__main__':

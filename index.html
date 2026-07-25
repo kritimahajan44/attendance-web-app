@@ -9,7 +9,7 @@
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         video, canvas { width: 100%; border-radius: 8px; background-color: #222; }
         .btn-group { margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-        button { padding: 12px 20px; font-size: 15px; border: none; border-radius: 5px; cursor: pointer; color: white; transition: 0.2s; }
+        button { padding: 12px 18px; font-size: 15px; border: none; border-radius: 5px; cursor: pointer; color: white; transition: 0.2s; }
         .btn-scan { background-color: #28a745; }
         .btn-reg { background-color: #007bff; }
         .btn-logs { background-color: #17a2b8; }
@@ -59,7 +59,7 @@
         const canvas = document.getElementById('canvas');
         const statusDiv = document.getElementById('status');
 
-        // Request WebCam access
+        // Access system webcam
         navigator.mediaDevices.getUserMedia({ video: true })
             .then(stream => video.srcObject = stream)
             .catch(err => statusDiv.innerHTML = "⚠️ Camera permission denied or not available!");
@@ -89,7 +89,7 @@
             .then(res => res.json())
             .then(data => {
                 statusDiv.innerHTML = data.message || "Done!";
-                if (endpoint === '/scan') fetchLogs(); // Refresh logs on scan
+                if (endpoint === '/scan') fetchLogs();
             })
             .catch(err => {
                 statusDiv.innerHTML = "⚠️ Connection error. Try again!";
@@ -116,7 +116,7 @@
                     table.style.display = 'table';
                 })
                 .catch(err => {
-                    statusDiv.innerHTML = "⚠️ Failed to fetch logs.";
+                    statusDiv.innerHTML = "⚠️ Failed to fetch attendance logs.";
                 });
         }
     </script>
