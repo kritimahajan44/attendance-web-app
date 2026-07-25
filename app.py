@@ -156,28 +156,84 @@ def decode_image(data_url):
     return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
 @app.route('/scan', methods=['POST'])
+def scan():@app.route('/scan', methods=['POST'])
 def scan():
-    frame = decode_image(request.json['image'])
-    db_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    if not db_files:
-        return jsonify({"message": "⚠️ Database is empty. Please register first using the blue button."})
-    
     try:
+        frame = decode_image(request.json['image'])
+        db_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        
+        if not db_files:
+            return jsonify({"message": "⚠️ Database is empty. Please register first using the blue button."})
+
+        # Clear old .pkl cache to ensure clean index
+        for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
+            try:
+                os.remove(pkl)
+            except Exception:
+                pass
+
+        # Fast execution: skip backend detector to avoid cpu/memory hangs
+        dfs = DeepFace.find(
+            img_path=frame, 
+            db_path=DB_PATH, 
+            model_name='Facenet', 
+            detector_backend='skip', 
+            enforce_detection=False, 
+            silent=True
+        )
+
+        gc.collect()
+
+        if len(dfs) > 0 and not dfs[0].empty:
+            matched_file = dfs[0].iloc[0]['identity']
+            person_name = os.path.basename(matched_file).rsplit('.', 1)[0]
+            msg = mark_attendance(person_name)
+            return jsonify({"message": msg})
+        
+        return jsonify({"message": "⚠️ Face unrecognized. Please register first."})
+
+    except Exception as e:
+        gc.collect()
+        return jsonify({"message": f"Error during scan: {str(e)}"})
+    
+    @app.route('/scan', methods=['POST'])
+def scan():
+    try:
+        frame = decode_image(request.json['image'])
+        db_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        
+        if not db_files:
+            return jsonify({"message": "⚠️ Database is empty. Please register first using the blue button."})
+
         # Delete old DeepFace .pkl cache
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
             except Exception:
                 pass
-            # Fast, low-RAM, and high-accuracy scanning
-    # Clean standard call for Facenet with opencv detector
+
         dfs = DeepFace.find(
             img_path=frame, 
             db_path=DB_PATH, 
             model_name='Facenet', 
-            detector_backend='opencv', 
+            detector_backend='skip', 
             enforce_detection=False, 
             silent=True
+        )
+
+        gc.collect()
+
+        if len(dfs) > 0 and not dfs[0].empty:
+            matched_file = dfs[0].iloc[0]['identity']
+            person_name = os.path.basename(matched_file).rsplit('.', 1)[0]
+            msg = mark_attendance(person_name)
+            return jsonify({"message": msg})
+        
+        return jsonify({"message": "⚠️ Face unrecognized. Please register first."})
+
+    except Exception as e:
+        gc.collect()
+        return jsonify({"message": f"Error during scan: {str(e)}"})
         )
         gc.collect()
         if len(dfs) > 0 and not dfs[0].empty:
