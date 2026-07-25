@@ -47,14 +47,6 @@ def mark_attendance(name):
         df.to_csv(CSV_PATH, index=False)
         return f"✅ Attendance successfully marked for {name} at {time_str}!"
 
-# Pre-warm DeepFace model into memory at startup
-print("Warmup: Loading DeepFace model into memory...")
-try:
-    DeepFace.build_model('Facenet')
-    print("Warmup complete!")
-except Exception as e:
-    print(f"Warmup warning: {str(e)}")
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -78,7 +70,7 @@ def register():
         file_path = os.path.join(DB_PATH, f"{name}.jpg")
         cv2.imwrite(file_path, frame)
 
-        # Remove stale pickle database cache so DeepFace picks up new face
+        # Remove stale pickle database cache
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
@@ -108,7 +100,6 @@ def scan():
         if not db_files:
             return jsonify({"message": "⚠️ Database is empty. Please register first!"})
 
-        # Remove stale pickle files
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
