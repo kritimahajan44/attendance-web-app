@@ -234,7 +234,6 @@ def scan():
     except Exception as e:
         gc.collect()
         return jsonify({"message": f"Error during scan: {str(e)}"})
-        )
         gc.collect()
         if len(dfs) > 0 and not dfs[0].empty:
             matched_file = dfs[0].iloc[0]['identity']
