@@ -54,6 +54,13 @@ def mark_attendance(name):
         return f"✅ Attendance marked for {name} at {time_str}!"
     except Exception as e:
         return f"⚠️ Failed to update attendance log: {str(e)}"
+    # Pre-warm DeepFace model during boot so user requests don't hit timeouts
+print("Warmup: Loading DeepFace model into memory...")
+try:
+    DeepFace.build_model('Facenet')
+    print("Warmup complete!")
+except Exception as e:
+    print(f"Warmup warning: {str(e)}")
 
 @app.route('/')
 def index():
