@@ -14,8 +14,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
-app = Flask(__name__)
-
+app = Flask(__name__, template_folder='.')
 # Ensure required directory and CSV exist
 os.makedirs(DB_PATH, exist_ok=True)
 
