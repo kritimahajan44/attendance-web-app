@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance Kiosk</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        video, canvas { width: 100%; border-radius: 8px; background-color: #222; }
+        .btn-group { margin-top: 15px; display: flex; gap: 10px; justify-content: center; }
+        button { padding: 12px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; transition: 0.2s; }
+        .btn-scan { background-color: #28a745; }
+        .btn-reg { background-color: #007bff; }
+        button:hover { opacity: 0.9; }
+        input[type="text"] { width: 80%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        #status { margin-top: 20px; font-weight: bold; font-size: 18px; min-height: 24px; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📷 Smart Attendance Kiosk</h2>
+        
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+
+        <div style="margin-top: 15px;">
+            <input type="text" id="nameInput" placeholder="Enter full name (for registration only)">
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-scan" onclick="captureAndSend('/scan')">Mark Attendance</button>
+            <button class="btn-reg" onclick="captureAndSend('/register')">Register New Person</button>
+        </div>
+
+        <div id="status">Status: Ready</div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const statusDiv = document.getElementById('status');
+
+        // Access WebCam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => video.srcObject = stream)
+            .catch(err => statusDiv.innerHTML = "⚠️ Camera permission denied or not available!");
+
+        function captureAndSend(endpoint) {
+            const name = document.getElementById('nameInput').value.trim();
+
+            if (endpoint === '/register' && !name) {
+                statusDiv.innerHTML = "⚠️ Please enter a name first!";
+                return;
+            }
+
+            statusDiv.innerHTML = "⏳ Processing face scan...";
+
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, image: imageData })
+            })
+            .then(res => res.json())
+            .then(data => {
+                statusDiv.innerHTML = data.message || "Done!";
+            })
+            .catch(err => {
+                statusDiv.innerHTML = "⚠️ Connection error. Try again!";
+            });
+        }
+    </script>
+</body>
+</html>
