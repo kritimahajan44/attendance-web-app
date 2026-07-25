@@ -8,13 +8,17 @@
         body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f7f6; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         video, canvas { width: 100%; border-radius: 8px; background-color: #222; }
-        .btn-group { margin-top: 15px; display: flex; gap: 10px; justify-content: center; }
-        button { padding: 12px 20px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; color: white; transition: 0.2s; }
+        .btn-group { margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        button { padding: 12px 20px; font-size: 15px; border: none; border-radius: 5px; cursor: pointer; color: white; transition: 0.2s; }
         .btn-scan { background-color: #28a745; }
         .btn-reg { background-color: #007bff; }
+        .btn-logs { background-color: #17a2b8; }
         button:hover { opacity: 0.9; }
         input[type="text"] { width: 80%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        #status { margin-top: 20px; font-weight: bold; font-size: 18px; min-height: 24px; color: #333; }
+        #status { margin-top: 20px; font-weight: bold; font-size: 17px; min-height: 24px; color: #333; }
+        table { width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
     </style>
 </head>
 <body>
@@ -31,9 +35,23 @@
         <div class="btn-group">
             <button class="btn-scan" onclick="captureAndSend('/scan')">Mark Attendance</button>
             <button class="btn-reg" onclick="captureAndSend('/register')">Register New Person</button>
+            <button class="btn-logs" onclick="fetchLogs()">📋 Attendance Logs</button>
         </div>
 
         <div id="status">Status: Ready</div>
+
+        <div style="margin-top: 25px;">
+            <table id="logsTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="logsBody"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -41,7 +59,7 @@
         const canvas = document.getElementById('canvas');
         const statusDiv = document.getElementById('status');
 
-        // Access WebCam
+        // Request WebCam access
         navigator.mediaDevices.getUserMedia({ video: true })
             .then(stream => video.srcObject = stream)
             .catch(err => statusDiv.innerHTML = "⚠️ Camera permission denied or not available!");
@@ -57,8 +75,8 @@
             statusDiv.innerHTML = "⏳ Processing face scan...";
 
             const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
+            canvas.width = 320;
+            canvas.height = 240;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             const imageData = canvas.toDataURL('image/jpeg');
@@ -71,10 +89,35 @@
             .then(res => res.json())
             .then(data => {
                 statusDiv.innerHTML = data.message || "Done!";
+                if (endpoint === '/scan') fetchLogs(); // Refresh logs on scan
             })
             .catch(err => {
                 statusDiv.innerHTML = "⚠️ Connection error. Try again!";
             });
+        }
+
+        function fetchLogs() {
+            fetch('/logs')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('logsBody');
+                    const table = document.getElementById('logsTable');
+                    tbody.innerHTML = '';
+                    if (!data || data.length === 0) {
+                        statusDiv.innerHTML = "ℹ️ No attendance records found yet.";
+                        table.style.display = 'none';
+                        return;
+                    }
+                    data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td>${row.Name}</td><td>${row.Date}</td><td>${row.Time}</td>`;
+                        tbody.appendChild(tr);
+                    });
+                    table.style.display = 'table';
+                })
+                .catch(err => {
+                    statusDiv.innerHTML = "⚠️ Failed to fetch logs.";
+                });
         }
     </script>
 </body>

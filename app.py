@@ -14,8 +14,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
-# Tell Flask to look in the root folder for index.html
-app = Flask(__name__, template_folder=BASE_DIR)
+app = Flask(__name__)
 
 # Ensure required directory and CSV exist
 os.makedirs(DB_PATH, exist_ok=True)
@@ -37,24 +36,18 @@ def mark_attendance(name):
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
 
-    try:
-        if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
-            df = pd.DataFrame(columns=["Name", "Date", "Time"])
-        else:
-            df = pd.read_csv(CSV_PATH)
+    df = pd.read_csv(CSV_PATH)
+    already_marked = ((df["Name"] == name) & (df["Date"] == date_str)).any()
 
-        todays_entries = df[(df['Name'] == name) & (df['Date'] == date_str)]
-
-        if not todays_entries.empty:
-            return f"ℹ️ {name} is already marked present for today!"
-
-        new_entry = pd.DataFrame([{"Name": name, "Date": date_str, "Time": time_str}])
-        df = pd.concat([df, new_entry], ignore_index=True)
+    if already_marked:
+        return f"ℹ️ Attendance for {name} is already marked today!"
+    else:
+        new_row = pd.DataFrame([{"Name": name, "Date": date_str, "Time": time_str}])
+        df = pd.concat([df, new_row], ignore_index=True)
         df.to_csv(CSV_PATH, index=False)
-        return f"✅ Attendance marked for {name} at {time_str}!"
-    except Exception as e:
-        return f"⚠️ Failed to update attendance log: {str(e)}"
-    # Pre-warm DeepFace model during boot so user requests don't hit timeouts
+        return f"✅ Attendance successfully marked for {name} at {time_str}!"
+
+# Pre-warm DeepFace model into memory at startup
 print("Warmup: Loading DeepFace model into memory...")
 try:
     DeepFace.build_model('Facenet')
@@ -64,10 +57,7 @@ except Exception as e:
 
 @app.route('/')
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        return f"Template Error: {str(e)}", 500
+    return render_template('index.html')
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -76,25 +66,30 @@ def register():
         name = data.get('name', '').strip()
         image_data = data.get('image', '')
 
-        if not name or not image_data:
-            return jsonify({"message": "⚠️ Name and image are required!"})
+        if not name:
+            return jsonify({"message": "⚠️ Please enter a name!"})
+        if not image_data:
+            return jsonify({"message": "⚠️ No image captured!"})
 
         frame = decode_image(image_data)
         if frame is None:
-            return jsonify({"message": "⚠️ Invalid image payload!"})
+            return jsonify({"message": "⚠️ Failed to process image!"})
 
         file_path = os.path.join(DB_PATH, f"{name}.jpg")
         cv2.imwrite(file_path, frame)
 
-        # Remove old DeepFace pkl caches to re-index faces immediately
+        # Remove stale pickle database cache so DeepFace picks up new face
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
             except Exception:
                 pass
 
-        return jsonify({"message": f"✅ {name} registered successfully!"})
+        gc.collect()
+        return jsonify({"message": f"✅ Registered {name} successfully!"})
+
     except Exception as e:
+        gc.collect()
         return jsonify({"message": f"Error during registration: {str(e)}"})
 
 @app.route('/scan', methods=['POST'])
@@ -111,21 +106,20 @@ def scan():
 
         db_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
         if not db_files:
-            return jsonify({"message": "⚠️ Database is empty. Please register first using the blue button."})
+            return jsonify({"message": "⚠️ Database is empty. Please register first!"})
 
-        # Remove stale pickle cache files
+        # Remove stale pickle files
         for pkl in glob.glob(os.path.join(DB_PATH, "*.pkl")):
             try:
                 os.remove(pkl)
             except Exception:
                 pass
 
-        # Perform fast DeepFace match using OpenCV backend for stability on free Render instances
         dfs = DeepFace.find(
             img_path=frame, 
             db_path=DB_PATH, 
             model_name='Facenet', 
-            detector_backend='opencv', 
+            detector_backend='skip', 
             enforce_detection=False, 
             silent=True
         )
@@ -147,11 +141,10 @@ def scan():
 @app.route('/logs', methods=['GET'])
 def get_logs():
     try:
-        if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
-            return jsonify([])
-        df = pd.read_csv(CSV_PATH)
-        records = df.to_dict(orient='records')
-        return jsonify(records)
+        if os.path.exists(CSV_PATH):
+            df = pd.read_csv(CSV_PATH)
+            return jsonify(df.to_dict(orient='records'))
+        return jsonify([])
     except Exception as e:
         return jsonify([])
 
