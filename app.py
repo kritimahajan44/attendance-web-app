@@ -10,20 +10,20 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
+# Tell Flask index.html is in root
 app = Flask(__name__, template_folder='.')
 
-# Create paths and initial CSV structure
 os.makedirs(DB_PATH, exist_ok=True)
+
 if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
     df = pd.DataFrame(columns=["Name", "Date", "Time"])
     df.to_csv(CSV_PATH, index=False)
 
-# Load OpenCV's built-in Haar Cascade Face Detector
+# OpenCV default face detector
 CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
 def decode_image(data_url):
-    """Converts base64 string from browser into an OpenCV BGR image matrix."""
     try:
         encoded_data = data_url.split(',')[1]
         nparr = np.frombuffer(base64.b64decode(encoded_data), np.uint8)
@@ -32,9 +32,8 @@ def decode_image(data_url):
         return None
 
 def extract_face(frame):
-    """Detects and returns cropped grayscale face image."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(100, 100))
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
     if len(faces) == 0:
         return None
     (x, y, w, h) = faces[0]
@@ -42,7 +41,6 @@ def extract_face(frame):
     return cv2.resize(face_crop, (200, 200))
 
 def mark_attendance(name):
-    """Logs student name and timestamp to attendance.csv."""
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
@@ -80,7 +78,7 @@ def register():
 
         face_img = extract_face(frame)
         if face_img is None:
-            return jsonify({"message": "⚠️ No face detected. Position yourself clearly in front of the camera!"})
+            return jsonify({"message": "⚠️ No face detected. Look straight at the camera!"})
 
         file_path = os.path.join(DB_PATH, f"{name}.jpg")
         cv2.imwrite(file_path, face_img)
@@ -104,13 +102,12 @@ def scan():
 
         face_img = extract_face(frame)
         if face_img is None:
-            return jsonify({"message": "⚠️ No face detected in frame. Look directly at camera."})
+            return jsonify({"message": "⚠️ No face detected in frame!"})
 
         registered_files = [f for f in os.listdir(DB_PATH) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
         if not registered_files:
             return jsonify({"message": "⚠️ Database is empty. Please register first!"})
 
-        # Match captured face against registered template faces using Mean Square Error / Template Matching
         best_match = None
         min_diff = float('inf')
 
@@ -127,8 +124,7 @@ def scan():
                 min_diff = diff
                 best_match = os.path.splitext(file)[0]
 
-        # Difference threshold to decide face match
-        if min_diff < 4500 and best_match:
+        if min_diff < 5000 and best_match:
             msg = mark_attendance(best_match)
             return jsonify({"message": msg})
         
