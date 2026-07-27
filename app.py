@@ -10,7 +10,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "faces_db")
 CSV_PATH = os.path.join(BASE_DIR, "attendance.csv")
 
-# Tell Flask index.html is in root
 app = Flask(__name__, template_folder='.')
 
 os.makedirs(DB_PATH, exist_ok=True)
@@ -19,9 +18,10 @@ if not os.path.exists(CSV_PATH) or os.path.getsize(CSV_PATH) == 0:
     df = pd.DataFrame(columns=["Name", "Date", "Time"])
     df.to_csv(CSV_PATH, index=False)
 
-# OpenCV default face detector
-CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
+def get_face_cascade():
+    """Safely fetch OpenCV Haar Cascade classifier."""
+    cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    return cv2.CascadeClassifier(cascade_path)
 
 def decode_image(data_url):
     try:
@@ -32,6 +32,7 @@ def decode_image(data_url):
         return None
 
 def extract_face(frame):
+    face_cascade = get_face_cascade()
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
     if len(faces) == 0:
@@ -78,7 +79,7 @@ def register():
 
         face_img = extract_face(frame)
         if face_img is None:
-            return jsonify({"message": "⚠️ No face detected. Look straight at the camera!"})
+            return jsonify({"message": "⚠️ No face detected. Position yourself clearly in front of the camera!"})
 
         file_path = os.path.join(DB_PATH, f"{name}.jpg")
         cv2.imwrite(file_path, face_img)
